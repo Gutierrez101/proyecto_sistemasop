@@ -1,0 +1,55 @@
+:root{
+  --sidebar-bg:#f1f3f4;
+  --accent:#2d3748;
+  --control-bg:#ececec;
+  --gantt-bg:#e9f3ff;
+  --btn:#333;
+}
+
+*{box-sizing:border-box}
+body,html,#root{height:100%;margin:0;font-family:Inter, Arial, sans-serif}
+
+.app{display:flex;height:100vh;background:#fff}
+
+/* Sidebar */
+.sidebar{
+  width:220px;background:var(--sidebar-bg);padding:20px;border-right:1px solid #ddd;
+}
+.sidebar h2{margin:0 0 20px 0;font-size:18px}
+.sidebar ul{list-style:none;padding:0;margin:0}
+.sidebar li{padding:12px 10px;border-radius:8px;margin-bottom:8px;cursor:pointer;color:#333;display:flex;align-items:center}
+.sidebar li:hover{background:#e6e6e6}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid #ddd;background:var(--control-bg)}
+.topbar .time{margin-left:auto;font-size:24px;color:#777}
+
+/* Content */
+.content{display:flex;gap:20px;padding:20px;flex:1}
+.left-panel{flex:1;display:flex;flex-direction:column;gap:16px}
+.right-panel{width:260px}
+
+/* Algorithm form */
+.form-card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:18px}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;margin-bottom:6px;font-weight:600;color:#444}
+.select, input[type="number"]{width:200px;padding:8px;border:1px solid #ccc;border-radius:4px}
+.start-btn{background:var(--btn);color:#fff;padding:8px 14px;border-radius:4px;border:none;cursor:pointer}
+
+/* controls */
+.controls{display:flex;gap:8px}
+.controls button{padding:8px 12px;border-radius:6px;border:1px solid #bbb;background:#fff;cursor:pointer}
+
+/* Gantt */
+.gantt-card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px}
+.gantt-area{background:var(--gantt-bg);height:320px;border-radius:4px;padding:10px;overflow:auto;display:flex}
+.gantt-left{width:120px}
+.gantt-grid{flex:1;position:relative;min-width:700px;border-left:1px solid rgba(0,0,0,0.06)}
+.gantt-row{display:flex;align-items:center;height:28px;border-bottom:1px solid rgba(0,0,0,0.03);position:relative}
+.gantt-bar{position:absolute;height:18px;border-radius:4px;background:#1e90ff;box-shadow:0 1px 0 rgba(0,0,0,0.15)}
+.gantt-bar.small{background:#3dd3c3}
+
+/* stats */
+.stats-card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px}
+.stats-card h4{margin:6px 0;color:#333}
