@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { SimulatorContext } from "../context/SimulatorContext";
 import axios from "axios";
 
 const API_URL = "http://localhost:5000/api";
 
 export default function CPUPanel() {
+  // ✅ OBTENER EL ALGORITMO DEL CONTEXTO
+  const { currentAlgorithm: contextAlgorithm, currentQuantum: contextQuantum } = useContext(SimulatorContext);
+  
   const [cpuState, setCpuState] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [processes, setProcesses] = useState([]);
@@ -13,12 +17,25 @@ export default function CPUPanel() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [simulationSpeed, setSimulationSpeed] = useState(1000);
   const [executionLog, setExecutionLog] = useState([]);
+  const [intervalId, setIntervalId] = useState(null);
 
-  // Fetch all data
+  // ✅ SINCRONIZAR CON EL CONTEXTO
+  useEffect(() => {
+    if (contextAlgorithm) {
+      setAlgorithm(contextAlgorithm);
+    }
+  }, [contextAlgorithm]);
+
+  useEffect(() => {
+    if (contextQuantum) {
+      setQuantum(contextQuantum);
+    }
+  }, [contextQuantum]);
+
   const fetchAllData = async () => {
     try {
       await Promise.all([
-        fetchCPUState(),
+        fetchSystemState(),
         fetchCPUMetrics(),
         fetchProcesses()
       ]);
@@ -27,15 +44,18 @@ export default function CPUPanel() {
     }
   };
 
-  const fetchCPUState = async () => {
+  // ✅ OBTENER ESTADO COMPLETO DEL SISTEMA (sin ejecutar)
+  const fetchSystemState = async () => {
     try {
-      const response = await axios.post(`${API_URL}/cpu/schedule`, {
-        algorithm,
-        time_quantum: quantum
-      });
-      setCpuState(response.data.data);
+      const response = await axios.get(`${API_URL}/system/state`);
+      const systemState = response.data.data;
+      
+      if (systemState.cpu) {
+        setCpuState(systemState.cpu);
+        console.log('📊 Estado CPU:', systemState.cpu);
+      }
     } catch (error) {
-      console.error("Error obteniendo estado CPU:", error);
+      console.error("Error obteniendo estado del sistema:", error);
     }
   };
 
@@ -60,13 +80,12 @@ export default function CPUPanel() {
   const scheduleCPU = async () => {
     try {
       const response = await axios.post(`${API_URL}/cpu/schedule`, {
-        algorithm,
-        time_quantum: quantum
+        algorithm: algorithm,
+        time_quantum: parseInt(quantum)
       });
       
       setCpuState(response.data.data);
       
-      // Agregar al log de ejecución
       const timestamp = new Date().toLocaleTimeString();
       setExecutionLog(prev => [{
         time: timestamp,
@@ -84,19 +103,22 @@ export default function CPUPanel() {
   };
 
   const startScheduling = () => {
+    if (isRunning) return;
+    
     setIsRunning(true);
     const interval = setInterval(() => {
       scheduleCPU();
     }, simulationSpeed);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setIsRunning(false);
-    }, 30000); // 30 segundos
+    
+    setIntervalId(interval);
   };
 
   const stopScheduling = () => {
     setIsRunning(false);
+    if (intervalId) {
+      clearInterval(intervalId);
+      setIntervalId(null);
+    }
   };
 
   const createNewProcess = async () => {
@@ -124,13 +146,27 @@ export default function CPUPanel() {
   };
 
   useEffect(() => {
+    if (isRunning) {
+      stopScheduling();
+    }
+  }, [algorithm, quantum]);
+
+  useEffect(() => {
     fetchAllData();
     
-    if (autoRefresh) {
+    if (autoRefresh && !isRunning) {
       const interval = setInterval(fetchAllData, 2000);
       return () => clearInterval(interval);
     }
-  }, [autoRefresh]);
+  }, [autoRefresh, isRunning]);
+
+  useEffect(() => {
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [intervalId]);
 
   const getStateColor = (state) => {
     const colors = {
@@ -171,29 +207,140 @@ export default function CPUPanel() {
               type="checkbox" 
               checked={autoRefresh} 
               onChange={e => setAutoRefresh(e.target.checked)}
+              disabled={isRunning}
             />
             Auto-actualizar
           </label>
           <button 
             onClick={fetchAllData}
+            disabled={isRunning}
             style={{
               padding: '8px 14px',
-              background: 'var(--accent)',
-              color: 'white',
+              background: isRunning ? '#d0d0d0' : 'var(--accent)',
+              color: isRunning ? '#808080' : 'white',
               border: 'none',
               borderRadius: 2,
-              cursor: 'pointer',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
               fontWeight: 500,
               fontSize: '13px',
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#1565c0'}
-            onMouseLeave={(e) => e.target.style.background = 'var(--accent)'}
           >
             Actualizar
           </button>
         </div>
       </div>
+
+      {/* ✅ MOSTRAR INFORMACIÓN DE LA SIMULACIÓN EJECUTADA */}
+      {contextAlgorithm && (
+        <div style={{
+          background: 'rgba(76, 175, 80, 0.1)',
+          border: '2px solid #4caf50',
+          borderRadius: 4,
+          padding: 16,
+          marginBottom: 20
+        }}>
+          <div style={{fontSize: 14, fontWeight: 600, color: '#2e7d32', marginBottom: 8}}>
+            ✅ Simulación Ejecutada en AlgorithmForm
+          </div>
+          <div style={{fontSize: 13, color: '#2e7d32'}}>
+            <strong>Algoritmo:</strong> {contextAlgorithm}
+            {contextAlgorithm === 'RR' && ` • Quantum: ${contextQuantum}`}
+          </div>
+        </div>
+      )}
+
+      {/* Estado del CPU */}
+      {cpuState ? (
+        <div style={{ 
+          background: 'var(--bg-primary)',
+          padding: 20,
+          borderRadius: 4,
+          marginBottom: 20,
+          border: '1px solid var(--border-color)'
+        }}>
+          <h3 style={{marginTop: 0, marginBottom: 16, fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)'}}>
+            Estado Actual del CPU
+          </h3>
+          <div style={{ 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: 15,
+            marginBottom: 16
+          }}>
+            <div>
+              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Algoritmo Activo</div>
+              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
+                {contextAlgorithm || cpuState.algorithm || 'N/A'}
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Quantum</div>
+              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
+                {contextQuantum || cpuState.time_quantum || 0}
+              </div>
+            </div>
+            {((contextAlgorithm === 'RR' || cpuState.algorithm === 'RR') && cpuState.quantum_counter !== undefined) && (
+              <div>
+                <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Contador Quantum</div>
+                <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
+                  {cpuState.quantum_counter} / {contextQuantum || cpuState.time_quantum}
+                </div>
+              </div>
+            )}
+            <div>
+              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Cola Ready</div>
+              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
+                {cpuState.ready_queue_size || 0}
+              </div>
+            </div>
+          </div>
+          
+          {cpuState.running_process ? (
+            <div style={{ 
+              padding: 15,
+              background: 'var(--gantt-bg)',
+              borderRadius: 2,
+              border: '1px solid var(--border-color)'
+            }}>
+              <strong style={{fontSize: 13, color: 'var(--text-primary)', display: 'block', marginBottom: 10}}>
+                Proceso en Ejecución
+              </strong>
+              <div style={{marginTop: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12, color: 'var(--text-secondary)'}}>
+                <div><strong style={{color: 'var(--text-primary)'}}>PID:</strong> {cpuState.running_process.pid}</div>
+                <div><strong style={{color: 'var(--text-primary)'}}>Nombre:</strong> {cpuState.running_process.name}</div>
+                <div><strong style={{color: 'var(--text-primary)'}}>Tiempo restante:</strong> {cpuState.running_process.remaining_time} u</div>
+                <div><strong style={{color: 'var(--text-primary)'}}>Prioridad:</strong> {cpuState.running_process.priority}</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ 
+              padding: 15,
+              background: 'var(--gantt-bg)',
+              borderRadius: 2,
+              textAlign: 'center',
+              color: 'var(--text-secondary)',
+              border: '1px dashed var(--border-color)',
+              fontSize: 13
+            }}>
+              CPU en estado IDLE - No hay procesos en ejecución
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          background: 'var(--bg-primary)',
+          padding: 20,
+          borderRadius: 4,
+          marginBottom: 20,
+          border: '1px solid var(--border-color)',
+          textAlign: 'center'
+        }}>
+          <div style={{fontSize: 14, color: 'var(--text-secondary)'}}>
+            Cargando estado del CPU...
+          </div>
+        </div>
+      )}
 
       {/* Configuración y Controles */}
       <div style={{ 
@@ -205,7 +352,7 @@ export default function CPUPanel() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         <h3 style={{marginTop: 0, marginBottom: 16, fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)'}}>
-          Control de Planificación
+          Control de Planificación Manual
         </h3>
         
         <div style={{ 
@@ -243,7 +390,7 @@ export default function CPUPanel() {
           {algorithm === "RR" && (
             <div>
               <label style={{display: 'block', marginBottom: 6, fontWeight: 500, fontSize: '13px', color: 'var(--text-primary)'}}>
-                Quantum (ms)
+                Quantum
               </label>
               <input 
                 type="number" 
@@ -286,6 +433,18 @@ export default function CPUPanel() {
           </div>
         </div>
 
+        <div style={{
+          padding: 12,
+          background: 'rgba(255, 193, 7, 0.1)',
+          borderRadius: 2,
+          marginBottom: 15,
+          border: '1px solid rgba(255, 193, 7, 0.3)',
+          fontSize: 12,
+          color: '#f57f17'
+        }}>
+          <strong>⚠️ Nota:</strong> Estos controles son para ejecución manual. El algoritmo mostrado arriba es el que se ejecutó en la simulación.
+        </div>
+
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button 
             onClick={scheduleCPU}
@@ -301,14 +460,8 @@ export default function CPUPanel() {
               fontSize: 13,
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => {
-              if (!isRunning) e.target.style.background = '#1565c0';
-            }}
-            onMouseLeave={(e) => {
-              if (!isRunning) e.target.style.background = 'var(--accent)';
-            }}
           >
-            Ejecutar 1 Paso
+            Ejecutar 1 Paso ({algorithm})
           </button>
 
           {!isRunning ? (
@@ -325,8 +478,6 @@ export default function CPUPanel() {
                 fontSize: 13,
                 transition: 'background-color 0.15s'
               }}
-              onMouseEnter={(e) => e.target.style.background = '#0d6e0d'}
-              onMouseLeave={(e) => e.target.style.background = '#107C10'}
             >
               Iniciar Auto-Ejecución
             </button>
@@ -344,8 +495,6 @@ export default function CPUPanel() {
                 fontSize: 13,
                 transition: 'background-color 0.15s'
               }}
-              onMouseEnter={(e) => e.target.style.background = '#7d1e22'}
-              onMouseLeave={(e) => e.target.style.background = '#A4262C'}
             >
               Detener
             </button>
@@ -364,89 +513,11 @@ export default function CPUPanel() {
               fontSize: 13,
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#ffb300'}
-            onMouseLeave={(e) => e.target.style.background = '#ffc107'}
           >
             Crear Proceso
           </button>
         </div>
       </div>
-
-      {/* Estado del CPU */}
-      {cpuState && (
-        <div style={{ 
-          background: 'var(--bg-primary)',
-          padding: 20,
-          borderRadius: 4,
-          marginBottom: 20,
-          border: '1px solid var(--border-color)'
-        }}>
-          <h3 style={{marginTop: 0, marginBottom: 16, fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)'}}>
-            Estado Actual del CPU
-          </h3>
-          <div style={{ 
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: 15,
-            marginBottom: 16
-          }}>
-            <div>
-              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Algoritmo Activo</div>
-              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
-                {cpuState.algorithm}
-              </div>
-            </div>
-            <div>
-              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Quantum</div>
-              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
-                {cpuState.time_quantum}
-              </div>
-            </div>
-            <div>
-              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Contador Quantum</div>
-              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
-                {cpuState.quantum_counter} / {cpuState.time_quantum}
-              </div>
-            </div>
-            <div>
-              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Cola Ready</div>
-              <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)'}}>
-                {cpuState.ready_queue_size}
-              </div>
-            </div>
-          </div>
-          
-          {cpuState.running_process ? (
-            <div style={{ 
-              padding: 15,
-              background: 'var(--gantt-bg)',
-              borderRadius: 2,
-              border: '1px solid var(--border-color)'
-            }}>
-              <strong style={{fontSize: 13, color: 'var(--text-primary)', display: 'block', marginBottom: 10}}>
-                Proceso en Ejecución
-              </strong>
-              <div style={{marginTop: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12, color: 'var(--text-secondary)'}}>
-                <div><strong style={{color: 'var(--text-primary)'}}>PID:</strong> {cpuState.running_process.pid}</div>
-                <div><strong style={{color: 'var(--text-primary)'}}>Nombre:</strong> {cpuState.running_process.name}</div>
-                <div><strong style={{color: 'var(--text-primary)'}}>Tiempo restante:</strong> {cpuState.running_process.remaining_time} u</div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ 
-              padding: 15,
-              background: 'var(--gantt-bg)',
-              borderRadius: 2,
-              textAlign: 'center',
-              color: 'var(--text-secondary)',
-              border: '1px dashed var(--border-color)',
-              fontSize: 13
-            }}>
-              CPU en estado IDLE - No hay procesos en ejecución
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Tabla de Procesos */}
       <div style={{
@@ -470,13 +541,12 @@ export default function CPUPanel() {
                 <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)'}}>Burst</th>
                 <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)'}}>Restante</th>
                 <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)'}}>Espera</th>
-                <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)'}}>Memoria</th>
               </tr>
             </thead>
             <tbody>
               {processes.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13}}>
+                  <td colSpan="7" style={{padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13}}>
                     No hay procesos
                   </td>
                 </tr>
@@ -511,19 +581,18 @@ export default function CPUPanel() {
                         padding: '3px 6px',
                         borderRadius: 2,
                         background: proc.priority <= 3 ? '#A4262C' : proc.priority <= 7 ? '#ffc107' : '#107C10',
-                        color: proc.priority <= 7 ? '#333' : 'white',
+                        color: proc.priority <= 7 && proc.priority > 3 ? '#333' : 'white',
                         fontSize: 11,
                         fontWeight: 600
                       }}>
                         {proc.priority}
                       </span>
                     </td>
-                    <td style={{padding: 10, textAlign: 'center'}}>{proc.burst_time}</td>
+                    <td style={{padding: 10, textAlign: 'center'}}>{proc.burst_time || 0}</td>
                     <td style={{padding: 10, textAlign: 'center', fontWeight: 600, color: proc.remaining_time === 0 ? '#107C10' : 'var(--accent)'}} >
-                      {proc.remaining_time}
+                      {proc.remaining_time || 0}
                     </td>
-                    <td style={{padding: 10, textAlign: 'center'}}>{proc.waiting_time}</td>
-                    <td style={{padding: 10, textAlign: 'center'}}>{proc.memory_required}KB</td>
+                    <td style={{padding: 10, textAlign: 'center'}}>{proc.waiting_time || 0}</td>
                   </tr>
                 ))
               )}
@@ -617,8 +686,6 @@ export default function CPUPanel() {
                 fontWeight: 500,
                 transition: 'background-color 0.15s'
               }}
-              onMouseEnter={(e) => e.target.style.background = '#7d1e22'}
-              onMouseLeave={(e) => e.target.style.background = '#A4262C'}
             >
               Limpiar
             </button>

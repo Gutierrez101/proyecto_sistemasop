@@ -12,6 +12,10 @@ export function SimulatorProvider({ children }) {
     throughput: 0,
     contextSwitches: 0
   });
+  
+  // NUEVO: Estado compartido para el algoritmo actual
+  const [currentAlgorithm, setCurrentAlgorithm] = useState('FCFS');
+  const [currentQuantum, setCurrentQuantum] = useState(4);
 
   // Función para resetear todo el estado
   const resetState = () => {
@@ -24,12 +28,13 @@ export function SimulatorProvider({ children }) {
       throughput: 0,
       contextSwitches: 0
     });
+    setCurrentAlgorithm('FCFS');
+    setCurrentQuantum(4);
   };
 
   // Detectar cuando se recarga la página
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Limpiar el estado en localStorage si existe
       localStorage.removeItem('simulatorState');
     };
 
@@ -46,10 +51,12 @@ export function SimulatorProvider({ children }) {
       localStorage.setItem('simulatorState', JSON.stringify({
         timeline,
         stats,
+        currentAlgorithm,
+        currentQuantum,
         timestamp: Date.now()
       }));
     }
-  }, [timeline, stats]);
+  }, [timeline, stats, currentAlgorithm, currentQuantum]);
 
   // Recuperar estado al cargar (con validación de tiempo)
   useEffect(() => {
@@ -69,8 +76,9 @@ export function SimulatorProvider({ children }) {
             throughput: 0,
             contextSwitches: 0
           });
+          setCurrentAlgorithm(parsed.currentAlgorithm || 'FCFS');
+          setCurrentQuantum(parsed.currentQuantum || 4);
         } else {
-          // Limpiar si es muy antiguo
           localStorage.removeItem('simulatorState');
         }
       } catch (error) {
@@ -87,7 +95,12 @@ export function SimulatorProvider({ children }) {
     setTimeline,
     stats,
     setStats,
-    resetState
+    resetState,
+    // NUEVO: Exponer el algoritmo actual
+    currentAlgorithm,
+    setCurrentAlgorithm,
+    currentQuantum,
+    setCurrentQuantum
   };
 
   return (

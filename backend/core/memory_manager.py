@@ -27,63 +27,95 @@ class MemoryManager:
     def initialize(self):
         # initialize frames and partitions according to total_memory
         total_frames = max(1, self.total_memory // 4)
-        self.frames = [{'frame': i, 'occupied': False, 'process': None} for i in range(total_frames)]
+        # ✅ INICIALIZAR FRAMES CORRECTAMENTE
+        self.frames = [
+            {'frame': i, 'occupied': False, 'process': None} 
+            for i in range(total_frames)
+        ]
 
         # Create simple partitions (equal chunks) for partition mode
         num_partitions = 4
         part_size = max(1, self.total_memory // num_partitions)
-        self.partitions = [{'id': i, 'size': part_size, 'allocated': False, 'pid': None} for i in range(num_partitions)]
+        self.partitions = [
+            {'id': i, 'size': part_size, 'allocated': False, 'pid': None} 
+            for i in range(num_partitions)
+        ]
+        
+        print(f"✅ MemoryManager inicializado: {total_frames} frames, modo: {self.mode}")
         return True
 
     def allocate(self, pid, size, algorithm='first_fit'):
-        # Basic allocation: support 'paging' and 'partitions' modes
+        """Asigna memoria a un proceso"""
+        print(f"🔧 Intentando asignar {size}KB al proceso {pid} (modo: {self.mode})")
+        
         if self.mode == 'partitions':
             # find first partition with enough size and not allocated
             for p in self.partitions:
                 if (not p['allocated']) and p['size'] >= size:
                     p['allocated'] = True
                     p['pid'] = pid
+                    print(f"✅ Partición {p['id']} asignada al proceso {pid}")
                     return True
+            print(f"❌ No hay particiones disponibles para {size}KB")
             return False
 
-        # paging mode: allocate frames (4 KB per frame)
-        pages_needed = max(1, (size + 3) // 4)
+        # ✅ MODO PAGING: Asignar frames
+        pages_needed = max(1, (size + 3) // 4)  # Redondear hacia arriba
         free_frames = [f for f in self.frames if not f['occupied']]
+        
+        print(f"   Páginas necesarias: {pages_needed}, Frames libres: {len(free_frames)}")
+        
         if len(free_frames) < pages_needed:
+            print(f"❌ No hay suficientes frames libres")
             return False
-        # assign first available frames
+        
+        # Asignar los primeros frames disponibles
         assigned = 0
         for f in self.frames:
             if not f['occupied'] and assigned < pages_needed:
                 f['occupied'] = True
                 f['process'] = pid
-                # record page in paging manager
+                
+                # Registrar página en el paging manager
                 if pid not in self.paging_manager.page_tables:
                     self.paging_manager.page_tables[pid] = []
                 self.paging_manager.page_tables[pid].append({'frame': f['frame']})
+                
                 assigned += 1
-        # update stats
+        
+        # Actualizar estadísticas
         self.page_accesses += pages_needed
         self.page_faults += pages_needed
+        
+        print(f"✅ Asignados {assigned} frames al proceso {pid}")
         return True
 
     def deallocate(self, pid):
+        """Libera memoria de un proceso"""
+        print(f"🔧 Liberando memoria del proceso {pid}")
+        
         # Free partition allocations
         for p in self.partitions:
             if p.get('pid') == pid:
                 p['allocated'] = False
                 p['pid'] = None
+                print(f"✅ Partición {p['id']} liberada")
 
         # Free frames and remove page table entries
+        freed_count = 0
         for f in self.frames:
             if f.get('process') == pid:
                 f['occupied'] = False
                 f['process'] = None
+                freed_count += 1
+        
         if pid in self.paging_manager.page_tables:
             del self.paging_manager.page_tables[pid]
+        
+        print(f"✅ Liberados {freed_count} frames del proceso {pid}")
 
     def get_memory_state(self):
-        # Provide a richer, frontend-friendly memory state for the UI
+        """Proporciona estado completo de la memoria para el frontend"""
         state = {
             'mode': self.mode,
             'page_faults': self.page_faults,
@@ -91,27 +123,23 @@ class MemoryManager:
             'total_memory': self.total_memory
         }
 
-        # Frames / paging data (assume 4KB frames)
-        total_frames = max(1, self.total_memory // 4)
-        state['total_frames'] = total_frames
-        frames = []
-        for i in range(total_frames):
-            frames.append({'frame': i, 'occupied': False, 'process': None})
-        state['frames'] = frames
+        # ✅ DEVOLVER FRAMES CON INFORMACIÓN DE OCUPACIÓN
+        state['total_frames'] = len(self.frames)
+        state['frames'] = self.frames  # Ya contiene 'occupied' y 'process'
 
-        # Partitions (static example) used when mode == 'partitions'
+        # Partitions
         if self.mode == 'partitions':
-            # create a few example partitions if none exist
-            state['partitions'] = [
-                {'id': 0, 'size': max(1, self.total_memory // 4), 'allocated': False, 'pid': None},
-                {'id': 1, 'size': max(1, self.total_memory // 4), 'allocated': False, 'pid': None},
-                {'id': 2, 'size': max(1, self.total_memory // 4), 'allocated': False, 'pid': None},
-                {'id': 3, 'size': max(1, self.total_memory // 4), 'allocated': False, 'pid': None}
-            ]
+            state['partitions'] = self.partitions
         else:
             state['partitions'] = []
 
         # Segments placeholder
         state['segments'] = []
+        
+        # Debug: imprimir algunos frames ocupados
+        occupied_frames = [f for f in self.frames if f['occupied']]
+        print(f"📊 Frames ocupados: {len(occupied_frames)}/{len(self.frames)}")
+        if occupied_frames:
+            print(f"   Ejemplos: {occupied_frames[:5]}")
 
         return state

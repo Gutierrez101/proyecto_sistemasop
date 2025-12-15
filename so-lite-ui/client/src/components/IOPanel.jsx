@@ -81,6 +81,32 @@ export default function IOPanel() {
     }
   };
 
+  // ✅ FUNCIÓN PARA RESETEAR DISPOSITIVOS (reiniciar el backend)
+  const resetDevices = async () => {
+    if (!confirm('¿Estás seguro de resetear los dispositivos?\n\nEsto reinicializará los contadores de cola.')) {
+      return;
+    }
+
+    try {
+      // Reinicializar el kernel para resetear dispositivos
+      await axios.post(`${API_URL}/kernel/initialize`, {
+        memory_mode: 'paging',
+        total_memory: 1024
+      });
+
+      // Limpiar historial local
+      setRequestHistory([]);
+      
+      alert('Dispositivos reseteados correctamente');
+      
+      await fetchDevices();
+      await fetchStatistics();
+    } catch (error) {
+      console.error("Error reseteando dispositivos:", error);
+      alert("Error: " + (error.response?.data?.message || error.message));
+    }
+  };
+
   const clearHistory = () => {
     setRequestHistory([]);
   };
@@ -123,7 +149,7 @@ export default function IOPanel() {
     switch ((type || '').toUpperCase()) {
       case 'DISK':
         return (
-          <svg {...commonProps} aria-hidden>
+          <svg {...commonProps} aria-hidden="true">
             <rect x="3" y="4" width="18" height="12" rx="2" stroke="var(--accent)" strokeWidth="1.2" fill="none" />
             <circle cx="12" cy="10" r="2" fill="var(--accent)" />
             <rect x="7" y="16" width="10" height="2" rx="1" fill="var(--border-color)" />
@@ -131,7 +157,7 @@ export default function IOPanel() {
         );
       case 'PRINTER':
         return (
-          <svg {...commonProps} aria-hidden>
+          <svg {...commonProps} aria-hidden="true">
             <rect x="4" y="3" width="16" height="8" rx="1" stroke="var(--accent)" strokeWidth="1.2" fill="none" />
             <rect x="6" y="11" width="12" height="6" rx="1" stroke="var(--border-color)" strokeWidth="1" fill="none" />
             <rect x="9" y="14" width="6" height="2" rx="0.5" fill="var(--accent)" />
@@ -139,7 +165,7 @@ export default function IOPanel() {
         );
       case 'KEYBOARD':
         return (
-          <svg {...commonProps} aria-hidden>
+          <svg {...commonProps} aria-hidden="true">
             <rect x="3" y="6" width="18" height="10" rx="1" stroke="var(--accent)" strokeWidth="1.2" fill="none" />
             <rect x="5" y="8" width="2" height="2" rx="0.3" fill="var(--accent)" />
             <rect x="9" y="8" width="2" height="2" rx="0.3" fill="var(--accent)" />
@@ -149,7 +175,7 @@ export default function IOPanel() {
         );
       case 'NETWORK':
         return (
-          <svg {...commonProps} aria-hidden>
+          <svg {...commonProps} aria-hidden="true">
             <path d="M4 12h16" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" />
             <circle cx="6" cy="12" r="1.6" fill="var(--accent)" />
             <circle cx="12" cy="12" r="1.6" fill="var(--accent)" />
@@ -158,7 +184,7 @@ export default function IOPanel() {
         );
       case 'USB':
         return (
-          <svg {...commonProps} aria-hidden>
+          <svg {...commonProps} aria-hidden="true">
             <path d="M12 3v8" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" />
             <circle cx="12" cy="13.5" r="1" fill="var(--accent)" />
             <path d="M12 14.5v3" stroke="var(--border-color)" strokeWidth="1" strokeLinecap="round" />
@@ -166,7 +192,7 @@ export default function IOPanel() {
         );
       default:
         return (
-          <svg {...commonProps} aria-hidden>
+          <svg {...commonProps} aria-hidden="true">
             <rect x="4" y="4" width="16" height="16" rx="2" stroke="var(--border-color)" strokeWidth="1" fill="none" />
             <circle cx="12" cy="12" r="2" fill="var(--text-secondary)" />
           </svg>
@@ -187,7 +213,7 @@ export default function IOPanel() {
     <div style={{ padding: 20 }}>
       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          Gestión de Dispositivos
+          Gestión de Dispositivos E/S
         </h2>
         <div style={{display: 'flex', gap: 10}}>
           <button 
@@ -203,16 +229,15 @@ export default function IOPanel() {
               fontSize: '13px',
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#1565c0'}
-            onMouseLeave={(e) => e.target.style.background = 'var(--accent)'}
           >
             Actualizar
           </button>
+          {/* ✅ BOTÓN PARA RESETEAR DISPOSITIVOS */}
           <button 
-            onClick={clearHistory}
+            onClick={resetDevices}
             style={{
               padding: '8px 14px',
-              background: '#A4262C',
+              background: '#d32f2f',
               color: 'white',
               border: 'none',
               borderRadius: 2,
@@ -221,8 +246,24 @@ export default function IOPanel() {
               fontSize: '13px',
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#7d1e22'}
-            onMouseLeave={(e) => e.target.style.background = '#A4262C'}
+          >
+            Resetear Dispositivos
+          </button>
+          {/* ✅ BOTÓN HABILITADO SOLO SI HAY HISTORIAL */}
+          <button 
+            onClick={clearHistory}
+            disabled={requestHistory.length === 0}
+            style={{
+              padding: '8px 14px',
+              background: requestHistory.length > 0 ? '#A4262C' : '#d0d0d0',
+              color: requestHistory.length > 0 ? 'white' : '#808080',
+              border: 'none',
+              borderRadius: 2,
+              cursor: requestHistory.length > 0 ? 'pointer' : 'not-allowed',
+              fontWeight: 500,
+              fontSize: '13px',
+              transition: 'background-color 0.15s'
+            }}
           >
             Limpiar Historial
           </button>
@@ -354,8 +395,6 @@ export default function IOPanel() {
               flex: 1,
               minWidth: '120px'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#0d6e0d'}
-            onMouseLeave={(e) => e.target.style.background = '#107C10'}
           >
             Crear Solicitud
           </button>
@@ -375,8 +414,6 @@ export default function IOPanel() {
               flex: 1,
               minWidth: '120px'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#1565c0'}
-            onMouseLeave={(e) => e.target.style.background = 'var(--accent)'}
           >
             Procesar Colas
           </button>
@@ -395,16 +432,6 @@ export default function IOPanel() {
               transition: 'background-color 0.15s',
               flex: 1,
               minWidth: '120px'
-            }}
-            onMouseEnter={(e) => {
-              if (autoProcess) {
-                e.target.style.background = '#7d1e22';
-              } else {
-                e.target.style.background = '#0d6e0d';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = autoProcess ? '#A4262C' : '#107C10';
             }}
           >
             {autoProcess ? 'Detener Auto' : 'Auto Procesar'}
@@ -428,36 +455,22 @@ export default function IOPanel() {
             <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
               <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Solicitudes Totales</div>
               <div style={{ fontSize: 20, fontWeight: 'bold', color: 'var(--accent)' }}>
-                {statistics.total_requests}
+                {statistics.total_requests || 0}
               </div>
             </div>
             <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
               <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Completadas</div>
               <div style={{ fontSize: 20, fontWeight: 'bold', color: '#107C10' }}>
-                {statistics.completed_requests}
-              </div>
-            </div>
-            <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
-              <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>En Progreso</div>
-              <div style={{ fontSize: 20, fontWeight: 'bold', color: '#ffc107' }}>
-                {statistics.pending_requests}
+                {statistics.completed_requests || 0}
               </div>
             </div>
             <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
               <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Interrupciones</div>
               <div style={{ fontSize: 20, fontWeight: 'bold', color: 'var(--accent)' }}>
-                {statistics.total_interrupts}
+                {statistics.total_interrupts || 0}
               </div>
             </div>
           </div>
-          {statistics.avg_turnaround_time > 0 && (
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
-              <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6}}>Tiempo Promedio de Retorno</div>
-              <span style={{ fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
-                {statistics.avg_turnaround_time.toFixed(2)}s
-              </span>
-            </div>
-          )}
         </div>
       )}
 
@@ -536,11 +549,11 @@ export default function IOPanel() {
                   borderRadius: 2,
                   fontSize: 12,
                   fontWeight: 700
-                }}>{device.queue_length}</div>
+                }}>{device.queue_length || 0}</div>
               </div>
               <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
                 <div style={{color: 'var(--text-secondary)'}}>Operaciones</div>
-                <div style={{fontWeight: 700}}>{device.total_operations}</div>
+                <div style={{fontWeight: 700}}>{device.total_operations || 0}</div>
               </div>
 
               {device.current_request && (

@@ -12,7 +12,19 @@ export default function MemoryPanel() {
   const fetchMemoryState = async () => {
     try {
       const response = await axios.get(`${API_URL}/memory/state`);
-      setMemoryState(response.data.data);
+      const memState = response.data.data;
+      
+      console.log('📊 Estado de memoria recibido:', memState);
+      console.log('   Total frames:', memState.frames?.length);
+      console.log('   Frames ocupados:', memState.frames?.filter(f => f.occupied).length);
+      
+      // Mostrar algunos frames ocupados
+      const occupied = memState.frames?.filter(f => f.occupied).slice(0, 5);
+      if (occupied && occupied.length > 0) {
+        console.log('   Ejemplos de frames ocupados:', occupied);
+      }
+      
+      setMemoryState(memState);
     } catch (error) {
       console.error("Error obteniendo estado de memoria:", error);
     }
@@ -105,17 +117,22 @@ export default function MemoryPanel() {
     );
   }
 
-  // Calcular estadísticas
-  const totalMemory = memoryState.mode === 'partitions' 
-    ? memoryState.partitions?.reduce((sum, p) => sum + p.size, 0) || 0
-    : memoryState.total_frames * 4; // 4KB por frame
-
-  const usedMemory = memoryState.mode === 'partitions'
-    ? memoryState.partitions?.filter(p => p.allocated).reduce((sum, p) => sum + p.size, 0) || 0
-    : memoryState.frames?.filter(f => f.occupied).length * 4 || 0;
+  // ✅ CALCULAR ESTADÍSTICAS CORRECTAMENTE
+  const totalMemory = memoryState.total_memory || 1024;
+  
+  // Para paging: contar frames ocupados
+  let usedMemory = 0;
+  if (memoryState.mode === 'paging' && memoryState.frames) {
+    const occupiedFrames = memoryState.frames.filter(f => f.occupied).length;
+    usedMemory = occupiedFrames * 4; // 4KB por frame
+  } else if (memoryState.mode === 'partitions' && memoryState.partitions) {
+    usedMemory = memoryState.partitions
+      .filter(p => p.allocated)
+      .reduce((sum, p) => sum + p.size, 0);
+  }
 
   const freeMemory = totalMemory - usedMemory;
-  const utilizationPercent = (usedMemory / totalMemory * 100) || 0;
+  const utilizationPercent = totalMemory > 0 ? (usedMemory / totalMemory * 100) : 0;
 
   return (
     <div style={{ padding: 20 }}>
@@ -150,8 +167,6 @@ export default function MemoryPanel() {
               fontSize: '13px',
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#1565c0'}
-            onMouseLeave={(e) => e.target.style.background = 'var(--accent)'}
           >
             Actualizar
           </button>
@@ -269,8 +284,6 @@ export default function MemoryPanel() {
               fontSize: 13,
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#0d6e0d'}
-            onMouseLeave={(e) => e.target.style.background = '#107C10'}
           >
             Asignar Memoria
           </button>
@@ -287,67 +300,11 @@ export default function MemoryPanel() {
               fontSize: 13,
               transition: 'background-color 0.15s'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#7d1e22'}
-            onMouseLeave={(e) => e.target.style.background = '#A4262C'}
           >
             Liberar Memoria
           </button>
         </div>
       </div>
-
-      {/* Modo Particiones */}
-      {memoryState.mode === "partitions" && memoryState.partitions && (
-        <div style={{marginBottom: 20}}>
-          <div style={{
-            background: 'var(--bg-primary)',
-            padding: 20,
-            borderRadius: 4,
-            border: '1px solid var(--border-color)'
-          }}>
-            <h3 style={{marginTop: 0, marginBottom: 16, fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)'}}>
-              Frames de Memoria
-            </h3>
-            <div style={{ 
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-              gap: 10
-            }}>
-              {memoryState.partitions.map((partition) => (
-                <div
-                  key={partition.id}
-                  style={{
-                    padding: 14,
-                    borderRadius: 2,
-                    background: partition.allocated ? '#fef2f2' : '#f0fdf4',
-                    border: `1px solid ${partition.allocated ? '#fca5a5' : '#86efac'}`,
-                    textAlign: 'center'
-                  }}
-                >
-                  <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>
-                    Frame {partition.id}
-                  </div>
-                  <div style={{fontSize: 18, fontWeight: 'bold', color: 'var(--accent)', marginBottom: 4}}>
-                    {partition.size}KB
-                  </div>
-                  <div style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: partition.allocated ? '#A4262C' : '#107C10',
-                    marginBottom: 4
-                  }}>
-                    {partition.allocated ? "Asignado" : "Libre"}
-                  </div>
-                  {partition.allocated && (
-                    <div style={{fontSize: 11, color: 'var(--text-secondary)'}}>
-                      P{partition.process_id}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modo Paginación */}
       {memoryState.mode === "paging" && (
@@ -371,41 +328,31 @@ export default function MemoryPanel() {
               <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
                 <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Frames Totales</div>
                 <div style={{fontSize: 20, fontWeight: 'bold', color: 'var(--accent)'}}>
-                  {memoryState.total_frames}
+                  {memoryState.frames?.length || 0}
+                </div>
+              </div>
+              <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
+                <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Frames Ocupados</div>
+                <div style={{fontSize: 20, fontWeight: 'bold', color: '#ffc107'}}>
+                  {memoryState.frames?.filter(f => f.occupied).length || 0}
                 </div>
               </div>
               <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
                 <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Fallos de Página</div>
                 <div style={{fontSize: 20, fontWeight: 'bold', color: '#A4262C'}}>
-                  {memoryState.page_faults}
+                  {memoryState.page_faults || 0}
                 </div>
               </div>
               <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
                 <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Accesos</div>
                 <div style={{fontSize: 20, fontWeight: 'bold', color: 'var(--accent)'}}>
-                  {memoryState.page_accesses}
-                </div>
-              </div>
-              <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
-                <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Tasa Aciertos</div>
-                <div style={{fontSize: 20, fontWeight: 'bold', color: '#107C10'}}>
-                  {memoryState.page_accesses > 0 
-                    ? (((memoryState.page_accesses - memoryState.page_faults) / memoryState.page_accesses) * 100).toFixed(1)
-                    : 0}%
-                </div>
-              </div>
-              <div style={{background: 'var(--gantt-bg)', padding: 12, borderRadius: 2, border: '1px solid var(--border-color)', textAlign: 'center'}}>
-                <div style={{fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6}}>Tasa Fallos</div>
-                <div style={{fontSize: 20, fontWeight: 'bold', color: '#A4262C'}}>
-                  {memoryState.page_accesses > 0 
-                    ? ((memoryState.page_faults / memoryState.page_accesses) * 100).toFixed(1)
-                    : 0}%
+                  {memoryState.page_accesses || 0}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Visualización de Frames */}
+          {/* ✅ VISUALIZACIÓN DE FRAMES MEJORADA */}
           <div style={{
             background: 'var(--bg-primary)',
             padding: 20,
@@ -451,37 +398,48 @@ export default function MemoryPanel() {
               gridTemplateColumns: "repeat(auto-fill, minmax(50px, 1fr))",
               gap: 6
             }}>
-              {memoryState.frames?.map((frame) => (
-                <div
-                  key={frame.frame}
-                  style={{
-                    padding: 8,
-                    textAlign: "center",
-                    borderRadius: 2,
-                    background: frame.occupied ? '#ffc107' : 'var(--border-color)',
-                    color: frame.occupied ? '#333' : 'var(--text-secondary)',
-                    fontSize: 12,
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.15s',
-                    border: `1px solid ${frame.occupied ? '#ffb300' : '#d0d0d0'}`
-                  }}
-                  title={frame.occupied ? `Frame ${frame.frame} - Proceso P${frame.process}` : `Frame ${frame.frame} - Libre`}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = frame.occupied ? '#ffb300' : '#bfbfbf';
-                    setSelectedProcess(frame.occupied ? frame.process : null);
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = frame.occupied ? '#ffc107' : 'var(--border-color)';
-                    setSelectedProcess(null);
-                  }}
-                >
-                  {frame.frame}
-                  {frame.occupied && (
-                    <div style={{fontSize: 10, marginTop: 2}}>P{frame.process}</div>
-                  )}
+              {memoryState.frames?.length > 0 ? (
+                memoryState.frames.map((frame) => {
+                  const isOccupied = frame.occupied === true;
+                  const processId = frame.process;
+                  
+                  return (
+                    <div
+                      key={frame.frame}
+                      style={{
+                        padding: 8,
+                        textAlign: "center",
+                        borderRadius: 2,
+                        background: isOccupied ? '#ffc107' : 'var(--border-color)',
+                        color: isOccupied ? '#333' : 'var(--text-secondary)',
+                        fontSize: 12,
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s',
+                        border: `1px solid ${isOccupied ? '#ffb300' : '#d0d0d0'}`
+                      }}
+                      title={isOccupied ? `Frame ${frame.frame} - Proceso P${processId}` : `Frame ${frame.frame} - Libre`}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = isOccupied ? '#ffb300' : '#bfbfbf';
+                        setSelectedProcess(isOccupied ? processId : null);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = isOccupied ? '#ffc107' : 'var(--border-color)';
+                        setSelectedProcess(null);
+                      }}
+                    >
+                      {frame.frame}
+                      {isOccupied && processId && (
+                        <div style={{fontSize: 10, marginTop: 2}}>P{processId}</div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{gridColumn: '1 / -1', textAlign: 'center', padding: 20, color: 'var(--text-secondary)'}}>
+                  No hay frames inicializados
                 </div>
-              ))}
+              )}
             </div>
             {selectedProcess !== null && (
               <div style={{
@@ -498,90 +456,6 @@ export default function MemoryPanel() {
             )}
           </div>
         </>
-      )}
-
-      {/* Modo Segmentación */}
-      {memoryState.mode === "segmentation" && memoryState.segments && (
-        <div>
-          <div style={{
-            background: 'var(--bg-primary)',
-            padding: 20,
-            borderRadius: 4,
-            border: '1px solid var(--border-color)',
-            marginBottom: 20
-          }}>
-            <h3 style={{marginTop: 0, marginBottom: 16, fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)'}}>
-              Segmentos de Memoria
-            </h3>
-            {memoryState.segments.length === 0 ? (
-              <div style={{
-                padding: 20,
-                textAlign: 'center',
-                background: 'var(--gantt-bg)',
-                borderRadius: 2,
-                color: 'var(--text-secondary)',
-                fontSize: 13
-              }}>
-                No hay segmentos asignados
-              </div>
-            ) : (
-              memoryState.segments.map((proc) => (
-                <div 
-                  key={proc.process}
-                  style={{ 
-                    background: 'var(--gantt-bg)',
-                    padding: 16,
-                    borderRadius: 2,
-                    marginBottom: 12,
-                    border: '1px solid var(--border-color)'
-                  }}
-                >
-                  <h4 style={{
-                    marginTop: 0,
-                    marginBottom: 12,
-                    color: 'var(--text-primary)',
-                    fontSize: 13,
-                    fontWeight: 600
-                  }}>
-                    Proceso {proc.process}
-                  </h4>
-                  <div style={{ 
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-                    gap: 10
-                  }}>
-                    {proc.segments.map((seg) => (
-                      <div 
-                        key={seg.num}
-                        style={{ 
-                          background: 'var(--bg-primary)',
-                          padding: 12,
-                          borderRadius: 2,
-                          border: "1px solid var(--border-color)"
-                        }}
-                      >
-                        <div style={{
-                          fontWeight: 'bold',
-                          marginBottom: 6,
-                          color: 'var(--accent)',
-                          fontSize: 13
-                        }}>
-                          {seg.name || `Segmento ${seg.num}`}
-                        </div>
-                        <div style={{marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)'}}>
-                          <strong>Base:</strong> {seg.base}
-                        </div>
-                        <div style={{fontSize: 12, color: 'var(--text-secondary)'}}>
-                          <strong>Tamaño:</strong> {seg.size} KB
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       )}
 
       {/* Tabla de Procesos con Memoria Asignada */}
@@ -602,7 +476,7 @@ export default function MemoryPanel() {
                 <th style={{padding: 10, textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)'}}>PID</th>
                 <th style={{padding: 10, textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)'}}>Nombre</th>
                 <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)'}}>Estado</th>
-                <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)'}}>Memoria Requerida</th>
+                <th style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)'}}>Memoria Asignada</th>
               </tr>
             </thead>
             <tbody>
@@ -613,32 +487,38 @@ export default function MemoryPanel() {
                   </td>
                 </tr>
               ) : (
-                processes.map(proc => (
-                  <tr 
-                    key={proc.pid}
-                    style={{borderBottom: '1px solid var(--border-color)'}}
-                  >
-                    <td style={{padding: 10, fontWeight: 'bold', fontSize: 12, color: 'var(--text-primary)'}}>{proc.pid}</td>
-                    <td style={{padding: 10, fontSize: 12, color: 'var(--text-primary)'}}>{proc.name}</td>
-                    <td style={{padding: 10, textAlign: 'center'}}>
-                      <span style={{
-                        padding: '4px 10px',
-                        borderRadius: 2,
-                        background: proc.state === 'RUNNING' ? '#107C10' : 
-                                   proc.state === 'READY' ? 'var(--accent)' :
-                                   proc.state === 'WAITING' ? '#ffc107' : '#bfbfbf',
-                        color: proc.state === 'WAITING' ? '#333' : 'white',
-                        fontSize: 11,
-                        fontWeight: 'bold'
-                      }}>
-                        {proc.state}
-                      </span>
-                    </td>
-                    <td style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: 'var(--accent)'}}>
-                      {proc.memory_required} KB
-                    </td>
-                  </tr>
-                ))
+                processes.map(proc => {
+                  // ✅ CONTAR FRAMES ASIGNADOS A ESTE PROCESO
+                  const framesAssigned = memoryState.frames?.filter(f => f.occupied && f.process === proc.pid).length || 0;
+                  const memoryUsed = framesAssigned * 4; // 4KB por frame
+                  
+                  return (
+                    <tr 
+                      key={proc.pid}
+                      style={{borderBottom: '1px solid var(--border-color)'}}
+                    >
+                      <td style={{padding: 10, fontWeight: 'bold', fontSize: 12, color: 'var(--text-primary)'}}>{proc.pid}</td>
+                      <td style={{padding: 10, fontSize: 12, color: 'var(--text-primary)'}}>{proc.name}</td>
+                      <td style={{padding: 10, textAlign: 'center'}}>
+                        <span style={{
+                          padding: '4px 10px',
+                          borderRadius: 2,
+                          background: proc.state === 'RUNNING' ? '#107C10' : 
+                                     proc.state === 'READY' ? 'var(--accent)' :
+                                     proc.state === 'WAITING' ? '#ffc107' : '#bfbfbf',
+                          color: proc.state === 'WAITING' ? '#333' : 'white',
+                          fontSize: 11,
+                          fontWeight: 'bold'
+                        }}>
+                          {proc.state}
+                        </span>
+                      </td>
+                      <td style={{padding: 10, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: 'var(--accent)'}}>
+                        {memoryUsed > 0 ? `${memoryUsed} KB (${framesAssigned} frames)` : 'Sin asignar'}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

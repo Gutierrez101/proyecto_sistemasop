@@ -100,13 +100,29 @@ def create_process():
         burst_time = data.get('burst_time', 10)
         memory_required = data.get('memory_required', 100)
         
+        print(f"\n{'='*60}")
+        print(f"📝 Creando proceso: {name}")
+        print(f"   Prioridad: {priority}, Burst: {burst_time}, Memoria: {memory_required}KB")
+        print('='*60)
+        
         # Crear proceso usando ProcessManager
         pid = process_manager.create_process(name, priority, burst_time, memory_required)
+        print(f"✅ Proceso creado con PID: {pid}")
         
-        # Intentar asignar memoria usando MemoryManager
+        # ✅ INTENTAR ASIGNAR MEMORIA USANDO MemoryManager
         memory_allocated = False
         if memory_manager:
+            print(f"🔧 Intentando asignar {memory_required}KB de memoria al proceso {pid}...")
             memory_allocated = memory_manager.allocate(pid, memory_required)
+            
+            if memory_allocated:
+                print(f"✅ Memoria asignada correctamente al proceso {pid}")
+            else:
+                print(f"⚠️ No se pudo asignar memoria al proceso {pid}")
+        else:
+            print("⚠️ MemoryManager no disponible")
+        
+        print('='*60)
         
         return jsonify({
             'status': 'success',
@@ -116,6 +132,8 @@ def create_process():
         }), 201
     except Exception as e:
         print(f"❌ Error creando proceso: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -748,15 +766,42 @@ def get_system_state():
         return jsonify({'status': 'error', 'message': 'Kernel no inicializado'}), 400
     
     try:
+        # ✅ OBTENER CPU STATE CORRECTAMENTE
+        cpu_state = {}
+        if cpu_scheduler:
+            cpu_state = {
+                'algorithm': cpu_scheduler.current_algorithm,
+                'time_quantum': cpu_scheduler.time_quantum,
+                'quantum_counter': cpu_scheduler.quantum_counter,
+                'ready_queue_size': len(process_manager.ready_queue) if process_manager else 0
+            }
+            
+            # Agregar información del proceso en ejecución
+            if process_manager and process_manager.running_process:
+                running_pcb = process_manager.processes.get(process_manager.running_process)
+                if running_pcb:
+                    cpu_state['running_process'] = {
+                        'pid': running_pcb.pid,
+                        'name': running_pcb.name,
+                        'remaining_time': running_pcb.remaining_time,
+                        'priority': running_pcb.priority,
+                        'state': running_pcb.state
+                    }
+                else:
+                    cpu_state['running_process'] = None
+            else:
+                cpu_state['running_process'] = None
+        
         # Recopilar datos de TODOS los módulos
         system_state = {
             'processes': process_manager.get_all_processes_info() if process_manager else [],
-            'cpu': cpu_scheduler.get_cpu_state() if cpu_scheduler else {},
+            'cpu': cpu_state,
             'cpu_metrics': cpu_scheduler.calculate_metrics() if cpu_scheduler else {},
             'memory': memory_manager.get_memory_state() if memory_manager else {},
             'io_devices': io_manager.get_devices_state() if io_manager else [],
             'io_statistics': io_manager.get_statistics() if io_manager else {},
-            'concurrency': concurrency_manager.get_concurrency_state() if concurrency_manager else {}
+            'concurrency': concurrency_manager.get_concurrency_state() if concurrency_manager else {},
+            'clock': 0  # Puedes implementar un reloj del sistema si lo necesitas
         }
         
         return jsonify({
@@ -765,6 +810,8 @@ def get_system_state():
         }), 200
     except Exception as e:
         print(f"❌ Error obteniendo estado del sistema: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'status': 'error',
             'message': str(e)
